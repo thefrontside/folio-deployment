@@ -1,2 +1,2 @@
-# folio-okapi-deployment
-Continuous Deployment configuration the frontside Okapi instance.
+# folio-deployment
+Deploy Folio to our Infrastructure
