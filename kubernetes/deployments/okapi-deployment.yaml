@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: okapi-cluster
+  name: okapi-cluster
+  namespace: default
+spec:
+  type: LoadBalancer
+  ports:
+    port: 80
+    protocol: TCP
+    targetPort: 9130
+  selector:
+    run: okapi-cluster 
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    run: okapi-cluster
+  name: okapi-cluster
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: okapi-cluster
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: okapi-cluster
+    spec:
+      containers:
+      - env:
+        - name: DB_HOST
+          value: localhost
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_DATABASE
+          value: folio
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: cloudsql-db-credentials
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: cloudsql-db-credentials
+        image: gcr.io/okapi-173322/okapi-cluster-postgres:v5
+        imagePullPolicy: Always
+        name: okapi-cluster
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      - command:
+        - /cloud_sql_proxy
+        - --dir=/cloudsql
+        - -instances=okapi-173322:us-east1:folio-okapi=tcp:5432
+        - -credential_file=/secrets/cloudsql/credentials.json
+        image: gcr.io/cloudsql-docker/gce-proxy:1.09
+        imagePullPolicy: IfNotPresent
+        name: cloudsql-proxy
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /secrets/cloudsql
+          name: cloudsql-instance-credentials
+          readOnly: true
+        - mountPath: /etc/ssl/certs
+          name: ssl-certs
+        - mountPath: /cloudsql
+          name: cloudsql
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: cloudsql-instance-credentials
+        secret:
+          defaultMode: 420
+          secretName: cloudsql-instance-credentials
+      - hostPath:
+          path: /etc/ssl/certs
+        name: ssl-certs
+      - emptyDir: {}
+        name: cloudsql
