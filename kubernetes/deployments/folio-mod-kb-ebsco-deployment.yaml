@@ -48,6 +48,18 @@ spec:
                 secretKeyRef:
                   name: cloudsql-db-credentials
                   key: password
+            - name: EBSCO_RESOURCE_MANAGEMENT_API_BASE_URL
+              value: https://sandbox.ebsco.io
+            - name: EBSCO_RESOURCE_MANAGEMENT_API_CUSTOMER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: rmapi-secret
+                  key: customer_id
+            - name: EBSCO_RESOURCE_MANAGEMENT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rmapi-secret
+                  key: api_key
         - image: gcr.io/cloudsql-docker/gce-proxy:1.09
           name: cloudsql-proxy
           command: ["/cloud_sql_proxy", "--dir=/cloudsql",
