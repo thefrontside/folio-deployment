@@ -1,0 +1,22 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: folio-test-ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  tls:
+  - hosts:
+    - okapi.frontside.io
+    secretName: okapi-tls-secret
+  backend:
+   serviceName: okapi-cluster
+   servicePort: 80
+  rules:
+  - host: okapi.frontside.io
+  - http:
+      paths:
+      - path:
+        backend:
+          serviceName: okapi-cluster
+          servicePort: 80
