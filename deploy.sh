@@ -18,3 +18,26 @@ gcloud --quiet container clusters get-credentials $CLUSTER_NAME;
 
 put_info "Kubernetes Cluster Info";
 kubectl cluster-info;
+
+# clone folioorg/okapi
+put_info "Cloning Okapi";
+git clone https://github.com/folio-org/okapi.git;
+
+put_info "Overriding Dockerfile";
+cp ./scripts/okapi-initdb-and-start.sh ./okapi/okapi-initdb-and-start.sh;
+cp ./Dockerfile ./okapi/Dockerfile;
+
+put_info "Building Okapi";
+cd ./okapi;
+docker build .;
+
+image=$(docker images --format="{{.ID}}" | head -n 1);
+
+put_info "Tagging image '$image' as '$TRAVIS_COMMIT'";
+docker tag "$image" ${DOCKER_IMAGE_NAME}:${TRAVIS_COMMIT};
+
+put_info "Tagging image '$image' as 'latest'";
+docker tag "$image" ${DOCKER_IMAGE_NAME}:latest;
+
+put_info "Pushing Okapi to GCR";
+gcloud docker -- push ${DOCKER_IMAGE_NAME};
