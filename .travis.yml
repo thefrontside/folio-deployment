@@ -39,7 +39,7 @@ deploy:
     script: ./deploy.sh
     skip_cleanup: true
     on:
-      branch: master
+      all_branches: true
 
 notifications:
   webhooks: https://fs-bitbot.herokuapp.com/travis

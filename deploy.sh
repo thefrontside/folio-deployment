@@ -6,6 +6,9 @@ bash_escape() ( printf '\\033[%dm' $1; );
 RESET=$(bash_escape 0); BLUE=$(bash_escape 34);
 put_info() ( printf "${BLUE}[INFO]${RESET} $1\n");
 
+# put_info "Getting jq"
+# apt-get update; apt-get jq;
+
 put_info "Authenticating to Google Cloud Services";
 echo $GCLOUD_SERVICE_KEY | base64 --decode -i > ${HOME}/gcloud-service-key.json;
 gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json;
@@ -25,6 +28,7 @@ git clone https://github.com/folio-org/okapi.git;
 
 put_info "Overriding Dockerfile";
 cp ./scripts/okapi-initdb-and-start.sh ./okapi/okapi-initdb-and-start.sh;
+cp ./scripts/okapi-register-and-discover-module.sh ./okapi/okapi-register-and-discover-module.sh;
 cp ./Dockerfile ./okapi/Dockerfile;
 
 put_info "Building Okapi";
