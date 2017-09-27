@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-tenant
+spec:
+  template:
+    metadata:
+      name: create-tenant
+    spec:
+      containers:
+      - name: create-tenant
+        image: gcr.io/okapi-173322/folio-toolkit
+        command: ["/usr/local/bin/folio/create_tenant.sh"]
+        args: ['{ "id":"fs", "name":"Frontside", "description":"Frontside okapi tenant" }']
+      restartPolicy: Never
