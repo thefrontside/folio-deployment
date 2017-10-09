@@ -23,27 +23,41 @@
 # ./okapi-initdb-and-start.sh --in-memory
 # ```
 
-
 # Kubernetes environment variables for okapi
-OKAPI_SERVICE_HOST="${OKAPI_CLUSTER_SERVICE_HOST:=localhost}"
-OKAPI_SERVICE_PORT="${OKAPI_CLUSTER_SERVICE_PORT:=9130}"
+OKAPI_SERVICE_HOST="${OKAPI_SERVICE_HOST:=localhost}"
+OKAPI_SERVICE_PORT="${OKAPI_SERVICE_PORT:=9130}"
 
 # Default environment variables
 DB_HOST="${DB_HOST:=localhost}"
 DB_PORT="${DB_PORT:=5432}"
 DB_USERNAME="${DB_USERNAME:=okapi}"
-DB_PASSWORD="${DB_PASSWORD:=okapi25}"
-DB_DATABASE="${DB_DATABASE:=okapi}"
+DB_PASSWORD="${DB_PASSWORD:=password}"
+DB_DATABASE="${DB_DATABASE:=folio}"
 OKAPI_URL="${OKAPI_URL:=http://$OKAPI_SERVICE_HOST:$OKAPI_SERVICE_PORT}"
 OKAPI_JAR="${OKAPI_JAR:=okapi-core/target/okapi-core-fat.jar}"
 OKAPI_ROLE="${OKAPI_ROLE:=cluster}"
+
+# Create ~/.pgpass file with appropriate credentials
+echo "$DB_HOST:$DB_PORT:*:$DB_USERNAME:$DB_PASSWORD" > ~/.pgpass
+chmod 600 ~/.pgpass
+
+# Since this depends on the sidecar cloudsql container, it's
+# possible that this will run before that container finishes initializing.
+# We have the restartPolicy set to OnFailure for this job, so
+# we want to throw a bad exit code if the DB isn't ready yet
+# and then retry until this passes (note the use of `set -e` above).
+pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USERNAME;
+while [ $? -ne 0 ]; do
+    echo "Waiting for cloudsql"
+    pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USERNAME;
+done
 
 # Set postgres params unless we want to use in-memory storage
 if [ "$1" != '--in-memory' ]; then
     OKAPI_JAVA_DB_OPTS+=" -Dstorage=postgres"
     OKAPI_JAVA_DB_OPTS+=" -Dpostgres_host=${DB_HOST}"
     OKAPI_JAVA_DB_OPTS+=" -Dpostgres_port=${DB_PORT}"
-    OKAPI_JAVA_DB_OPTS+=" -Dpostgres_user=${DB_USERNAME}"
+    OKAPI_JAVA_DB_OPTS+=" -Dpostgres_username=${DB_USERNAME}"
     OKAPI_JAVA_DB_OPTS+=" -Dpostgres_password=${DB_PASSWORD}"
     OKAPI_JAVA_DB_OPTS+=" -Dpostgres_database=${DB_DATABASE}"
     OKAPI_JAVA_OPTS+=" ${OKAPI_JAVA_DB_OPTS}"
@@ -63,30 +77,18 @@ if [ ! -f "$OKAPI_JAR" ]; then
     exit 1
 fi
 
-# Initialize the Okapi database if necessary
-if [ "$1" != '--in-memory' ]; then
-    if hash psql 2>/dev/null; then
-        psql postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_DATABASE}  \
-             -c "\dt" -t | cut -d \| -f 2 | grep -Eqw "modules|tenants"
 
-        POSTGRES_RETVAL=$?
-        if [ "$POSTGRES_RETVAL" != 0 ]; then
-            echo -n "Initializing okapi database..."
-            java ${OKAPI_JAVA_DB_OPTS} -jar "$OKAPI_JAR" initdatabase >/dev/null 2>&1
+echo -n "Initializing okapi database..."
+java ${OKAPI_JAVA_DB_OPTS} -jar "$OKAPI_JAR" initdatabase >/dev/null 2>&1
 
-            INIT_RETVAL=$?
-            if [ "$INIT_RETVAL" != 0 ]; then
-                echo "Failed"
-                exit 2
-            else
-                echo "OK"
-            fi
-        fi
-    else
-        echo "Postgres client not installed. Unable to test connectivity to postgres instance."
-        exit 2
-    fi
+INIT_RETVAL=$?
+if [ "$INIT_RETVAL" != 0 ]; then
+    echo "Failed"
+    exit 2
+else
+    echo "OK"
 fi
+
 
 # Start okapi
 echo "Starting Okapi..."

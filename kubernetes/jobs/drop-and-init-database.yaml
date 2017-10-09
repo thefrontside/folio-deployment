@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: drop-and-init-database
+spec:
+  template:
+    metadata:
+      name: drop-and-init-database
+    spec:
+      containers:
+      - name: drop-and-init-database
+        image: gcr.io/okapi-173322/folio-toolkit:1245am
+        env:
+        - name: REPO_NAME
+          value: "folio-org/okapi.git"
+        - name: REPO_VERSION
+          value: "v2.0.0"
+        - name: DB_HOST
+          value: "postgres"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_DATABASE
+          value: "folio"
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: cloudsql-db-credentials-v2
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: cloudsql-db-credentials-v2
+        command: ["/usr/local/bin/folio/install_java.sh"]
+        args:
+          - java
+          - -Dstorage=postgres
+          - -Dpostgres_host=$(DB_HOST)
+          - -Dpostgres_port=$(DB_PORT)
+          - -Dpostgres_database=$(DB_DATABASE)
+          - -Dpostgres_username=$(DB_USERNAME)
+          - -Dpostgres_password=$(DB_PASSWORD)
+          - -jar
+          - okapi-core/target/okapi-core-fat.jar
+          - initdatabase
+      restartPolicy: Never

@@ -1,0 +1,24 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: okapi-ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    kubernetes.io/tls-acme: "true"
+    kubernetes.io/ingress.allow-http: "false"
+spec:
+  tls:
+  - secretName: okapi2-tls
+    hosts:
+    - okapi-sandbox.frontside.io
+  backend:
+    serviceName: okapi
+    servicePort: 9130
+  rules:
+  - host: okapi-sandbox.frontside.io
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: okapi
+          servicePort: 9130

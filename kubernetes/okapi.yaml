@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    run: okapi
+  name: okapi
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 9130
+  selector:
+    run: okapi
+  type: LoadBalancer
+status:
+  loadBalancer: {}
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    run: okapi
+  name: okapi
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: okapi
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: okapi
+    spec:
+      containers:
+      - name: okapi
+        image: gcr.io/okapi-173322/folio-toolkit:1245am
+        env:
+        - name: REPO_NAME
+          value: "folio-org/okapi.git"
+        - name: REPO_VERSION
+          value: "v2.0.0"
+        - name: DB_HOST
+          value: "postgres"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_DATABASE
+          value: "folio"
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: cloudsql-db-credentials-v2
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: cloudsql-db-credentials-v2
+        - name: OKAPI_ROLE
+          value: "cluster"
+        command: ["/usr/local/bin/folio/install_java.sh"]
+        args: ["/usr/local/bin/folio/okapi-initdb-and-start.sh"]
+        resources: {}
+status: {}

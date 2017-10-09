@@ -1,0 +1,251 @@
+#!/usr/bin/env ruby
+# coding: utf-8
+
+# Gonna need some gems
+require 'bundler/inline'
+gemfile true do
+ source 'https://rubygems.org'
+ gem 'kubeclient'
+ gem 'clamp'
+ gem 'tty-spinner'
+ gem 'tty-command'
+ gem 'tty-prompt'
+ gem 'pastel'
+ gem 'pry'
+end
+
+require 'kubeclient'
+require 'clamp'
+require 'pastel'
+require 'tty-spinner'
+require 'tty-command'
+require 'tty-prompt'
+
+module FolioDeployment
+  class BaseCommand < Clamp::Command
+    attr_accessor :pastel, :prompt, :shell, :attr_accessor
+
+    # K8S Client #
+    def client
+      @client ||= Kubeclient::Client.new('http://localhost:8001/api', 'v1')
+    end
+
+    # TTY Helpers #
+    def pastel
+      @pastel ||= Pastel.new
+    end
+    def prompt
+      @prompt ||= TTY::Prompt.new
+    end
+    def shell
+      @shell ||= TTY::Command.new(dry_run: false, printer: :null)
+    end
+    def shell_out
+      @shell_out ||= TTY::Command.new(dry_run: false)
+    end
+
+    # Colorized Notices #
+    def put_info(text)
+      puts "%s %s" % [pastel.blue.bold("[INFO]"), pastel.bold(text)]
+    end
+    def put_warning(text)
+      puts "%s %s" % [pastel.yellow.bold("[WARNING]"), pastel.bold(text)]
+    end
+    def put_error(text)
+      puts "%s %s" % [pastel.red.bold("[ERROR]"), pastel.bold(text)]
+    end
+    def put_success(text)
+      puts "%s %s" % [pastel.green.bold("[SUCCESS]"), pastel.bold(text)]
+    end
+    def put_command(text)
+      puts "%s %s" % [pastel.cyan.bold("[COMMAND]"), pastel.bold(text)]
+    end
+
+    # Colorized Glyphs #
+    def success_mark
+      pastel.green.bold("✔")
+    end
+    def failure_mark
+      pastel.red.bold("✘")
+    end
+    def prompt_mark
+      pastel.magenta.bold("[PROMPT]")
+    end
+
+    # Misc #
+    def newline
+      puts "\n"
+    end
+    def die(msg)
+      put_error msg
+      exit
+    end
+
+    option "--version", :flag, "show version" do
+      puts "folio-deployment-0.0.1a"
+      exit 0
+    end
+  end
+
+  class DeployCommand < BaseCommand
+    def choose_context(current_context)
+      contexts = shell.run!("kubectl config get-contexts -o name")
+      die "Please configure contexts for kubectl before proceeding" unless !contexts.out.empty?
+      contexts = contexts.out.split("\n")
+      default_context = 0
+      choices = Hash[
+        contexts.each_with_index.map do |value, index|
+          default_context=index+1 if value==current_context;
+          [value, index]
+        end
+      ]
+      choice = prompt.select("Where would you like to deploy FOLIO?", choices, default: default_context)
+      context = contexts[choice]
+      put_info "Setting context to [ #{ pastel.yellow context } ]!"
+      shell.run! "kubectl config use-context #{context}"
+
+      put_info "Starting a proxy to the cluster"
+      shell.run! "kubectl proxy &"
+    end
+
+    def deploy_okapi
+      spinner = TTY::Spinner.new(
+        "#{pastel.cyan.bold('[COMMAND]')} [ :spinner ] Deploying Okapi ( :status )",
+        format: :dots,
+        success_mark: success_mark,
+        error_mark: failure_mark
+      )
+
+      spinner.auto_spin
+
+      spinner.update(status: "Applying Manifest")
+      shell.run!("kubectl apply -f kubernetes/okapi.yaml")
+
+      spinner.update(status: "Initializing")
+      sleep 5
+
+      okapi_pod = client.get_pods(label_selector: 'run=okapi').first
+      until okapi_pod.status.containerStatuses.map(&:ready).all? do
+        sleep 10
+        okapi_pod = client.get_pods(label_selector: 'run=okapi').first
+      end
+
+      spinner.update(status: "Complete!")
+      spinner.success
+    end
+
+    def create_tenant
+      put_command "Creating 'fs' Tenant"
+      shell.run!("kubectl apply -f kubernetes/jobs/create-tenant.yaml")
+    end
+
+    def deploy_modules
+      put_command "Deploying FOLIO Modules"
+      shell.run!("kubectl apply -f kubernetes/modules/")
+
+      spinners = TTY::Spinner::Multi.new("[ :spinner ] Building FOLIO Modules",
+        format: :dots,
+        success_mark: success_mark,
+        error_mark: failure_mark
+      )
+
+      module_pods = client.get_pods.map(&:metadata).map(&:name).select{ |pod| pod[/^mod-.*$/] }
+      module_pods.map! do |pod_name|
+        /(mod-\D*)/.match(pod_name)[1].chomp('-')
+      end
+
+      module_spinners = {}
+      pods = {}
+      module_pods.each do |module_pod|
+        pods[module_pod] = client.get_pods(label_selector: "run=#{module_pod}").first
+        module_spinners[module_pod] = spinners.register(
+          "[ :spinner ] #{module_pod}",
+          format: :dots,
+          success_mark: success_mark,
+          error_mark: failure_mark
+        )
+        module_spinners[module_pod].auto_spin
+      end
+
+      until pods.map { |pod_name, pod| pod.status.containerStatuses.map(&:ready).all? }.all?
+        module_pods.each do |module_pod|
+          pods[module_pod] = client.get_pods(label_selector: "run=#{module_pod}").first
+          module_spinners[module_pod].success if pods[module_pod].status.containerStatuses.map(&:ready).all?
+        end
+        sleep 10
+      end
+    end
+
+    def docker_build
+      put_command "Provision 'folio-toolkit' Container"
+      put_info "Building Docker Image"
+      shell.run!("docker build ./docker/ -t gcr.io/okapi-173322/folio-toolkit:#{Time.now.to_i} -t gcr.io/okapi-173322/folio-toolkit:latest")
+      put_info "Pushing to Google Container Registry"
+      shell.run!('gcloud docker -- push gcr.io/okapi-173322/folio-toolkit:latest')
+    end
+
+    def enable_tenant_modules
+      put_command "Enabling Modules for 'fs' Tenant"
+      shell.run!("kubectl apply -f kubernetes/jobs/enable-tenant-modules.yaml")
+      sleep 5
+    end
+
+    def create_admin_user
+      put_command "Creating 'admin' User"
+      shell.run!("kubectl apply -f kubernetes/jobs/create-admin-user.yaml")
+      sleep 5
+    end
+
+    def deploy_ingresses
+      put_command "Deploying Ingress and NGINX Ingress Controller"
+      shell.run!("kubectl apply -f kubernetes/ingress/")
+      sleep 5
+    end
+
+    def deploy_lego
+      put_command "Deploying 'kube-lego' Certificate Manager"
+      shell.run!("kubectl apply -f kubernetes/lego/")
+      sleep 5
+    end
+
+    def execute
+      namespace="okapi-#{Time.now.strftime('%Y-%m-%d-%Hh-%Mm-%Ss').downcase}"
+      put_command "Creating Namespace (#{namespace})"
+      shell.run!("kubectl create namespace #{namespace}")
+
+      put_command "Configuring Context"
+      shell.run!("kubectl config set-context $(kubectl config current-context) --namespace=#{namespace}")
+
+      put_info "Starting a proxy to the cluster"
+      shell.run! "kubectl proxy &"
+
+      client.discover; newline
+      docker_build; newline
+      deploy_okapi; newline
+      create_tenant; newline
+      deploy_modules; newline
+      enable_tenant_modules; newline
+      create_admin_user; newline
+      deploy_ingresses; newline
+      deploy_lego; newline
+
+      put_success "FOLIO Successfully Deployed"
+      shell_out.run!("kubectl get all")
+      exit 0
+    end
+  end
+
+  class TeardownCommand < BaseCommand
+    def execute
+      put_command "Tearing down FOLIO cluster"
+      shell_out.run!("kubectl delete ingresses,deployments,services,jobs --all")
+    end
+  end
+
+  class MainCommand < BaseCommand
+    subcommand "deploy", "Deploy FOLIO to a kubernetes cluster", DeployCommand
+    subcommand "teardown", "Remove FOLIO from a kubernetes cluster", TeardownCommand
+  end
+end
+
+FolioDeployment::MainCommand.run

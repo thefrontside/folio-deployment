@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: enable-tenant-modules
+spec:
+  template:
+    metadata:
+      name: enable-tenant-modules
+    spec:
+      containers:
+      - name: enable-tenant-modules
+        image: gcr.io/okapi-173322/folio-toolkit:1245am
+        command: ["/usr/local/bin/folio/enable_tenant_modules.sh"]
+        args:
+          - fs
+          - mod-users-14.2.2-SNAPSHOT
+          - mod-permissions-5.0.1-SNAPSHOT
+          - mod-login-4.0.1-SNAPSHOT
+          - mod-configuration-3.0.1-SNAPSHOT
+          - mod-authtoken-1.0.1-SNAPSHOT
+          - mod-kb-ebsco-0.1.0
+          - mod-users-bl-2.1.1-SNAPSHOT
+      restartPolicy: Never

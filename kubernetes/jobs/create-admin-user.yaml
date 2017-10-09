@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-admin-user
+spec:
+  template:
+    metadata:
+      name: create-admin-user
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: create-admin-user
+        image: gcr.io/okapi-173322/folio-toolkit:1245am
+        env:
+        - name: DB_HOST
+          value: "postgres"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_DATABASE
+          value: "folio"
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: cloudsql-db-credentials-v2
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: cloudsql-db-credentials-v2
+        command: ["/usr/local/bin/folio/create_admin_user.sh"]
+      # - name: cloudsql-proxy
+      #   command:
+      #     - /cloud_sql_proxy
+      #     - --dir=/cloudsql
+      #     - -instances=okapi-173322:us-east1:elrick-dev=tcp:5432
+      #     - -credential_file=/secrets/cloudsql/credentials.json
+      #   image: gcr.io/cloudsql-docker/gce-proxy:1.09
+      #   imagePullPolicy: IfNotPresent
+      #   terminationMessagePath: /dev/termination-log
+      #   terminationMessagePolicy: File
+      #   volumeMounts:
+      #   - mountPath: /secrets/cloudsql
+      #     name: cloudsql-instance-credentials
+      #     readOnly: true
+      #   - mountPath: /etc/ssl/certs
+      #     name: ssl-certs
+      #   - mountPath: /cloudsql
+      #     name: cloudsql
+      #   resources: {}
+      # volumes:
+      # - name: cloudsql-instance-credentials
+      #   secret:
+      #     secretName: cloudsql-instance-credentials
+      # - name: ssl-certs
+      #   hostPath:
+      #     path: /etc/ssl/certs
+      # - name: cloudsql
+      #   emptyDir:
