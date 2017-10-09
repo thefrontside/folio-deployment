@@ -23,7 +23,6 @@ metadata:
   labels:
     run: okapi
   name: okapi
-  namespace: default
 spec:
   replicas: 1
   selector:
@@ -76,7 +75,7 @@ spec:
         command:
           - /cloud_sql_proxy
           - --dir=/cloudsql
-          - -instances=okapi-173322:us-east1:folio-v2=tcp:5432
+          - -instances=okapi-173322:us-east1:okapi-sandbox=tcp:5432
           - -credential_file=/secrets/cloudsql/credentials.json
         image: gcr.io/cloudsql-docker/gce-proxy:1.09
         imagePullPolicy: IfNotPresent
