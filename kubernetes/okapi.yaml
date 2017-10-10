@@ -23,7 +23,6 @@ metadata:
   labels:
     run: okapi
   name: okapi
-  namespace: default
 spec:
   replicas: 1
   selector:

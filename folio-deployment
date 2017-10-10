@@ -208,19 +208,33 @@ module FolioDeployment
       sleep 5
     end
 
+    def deploy_secrets
+      put_command "Creating/Deploying Secrets"
+      shell_out.run!('kubectl create secret generic cloudsql-instance-credentials --from-literal="credentials.json=$CLOUDSQL_INSTANCE_CREDENTIALS"')
+      shell_out.run!("kubectl create secret generic cloudsql-db-credentials-v2 --from-literal=username=$CLOUDSQL_DB_USERNAME --from-literal=password=$CLOUDSQL_DB_PASSWORD")
+      shell_out.run!("kubectl create secret generic rmapi-secret --from-literal=api_key=$RMAPI_API_KEY --from-literal=customer_id=$RMAPI_CUSTOMER_ID")
+      shell_out.run!('kubectl apply -f okapi2-tls.yaml')
+    end
+
     def execute
       namespace="okapi-#{Time.now.strftime('%Y-%m-%d-%Hh-%Mm-%Ss').downcase}"
       put_command "Creating Namespace (#{namespace})"
       shell.run!("kubectl create namespace #{namespace}")
 
       put_command "Configuring Context"
-      shell.run!("kubectl config set-context $(kubectl config current-context) --namespace=#{namespace}")
+      shell.run!("kubectl config set-context $(kubectl config current-context) --namespace=#{namespace}") #
 
       put_info "Starting a proxy to the cluster"
-      shell.run! "kubectl proxy &"
+      pid = fork do
+        exec 'kubectl', 'proxy'
+      end
 
+      sleep 5
+
+      put_info "Client discovery"
       client.discover; newline
       docker_build; newline
+      deploy_secrets; newline
       deploy_okapi; newline
       create_tenant; newline
       deploy_modules; newline
