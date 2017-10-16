@@ -9,6 +9,7 @@ spec:
   selector:
     app: postgres
   clusterIP: None
+  #resolve DNS to IP of running cluster address
 ---
 apiVersion: extensions/v1beta1
 kind: Deployment
