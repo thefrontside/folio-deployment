@@ -1,0 +1,6 @@
+#! /usr/bin/env ruby
+
+require "bundler/setup"
+require "folio_deployment"
+
+FolioDeployment::CLI::Main.run

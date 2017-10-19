@@ -1,22 +1,12 @@
-dist: trusty
 sudo: required
 
 #Use ruby environment
 language: ruby
 rvm:
-  - 2.4.1
+  - 2.4.2
 
-# Cache Gcloud SDK between commands
-cache:
-  directories:
-    - "$HOME/google-cloud-sdk/"
+install:
+  - gem install yaml-lint
 
-# Install services
-services:
-  - docker
-
-install: true
-script: true
-
-notifications:
-  webhooks: https://fs-bitbot.herokuapp.com/travis
+script:
+  - yaml-lint ./kubernetes

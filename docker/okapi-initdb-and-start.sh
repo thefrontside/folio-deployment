@@ -36,6 +36,7 @@ DB_DATABASE="${DB_DATABASE:=folio}"
 OKAPI_URL="${OKAPI_URL:=http://$OKAPI_SERVICE_HOST:$OKAPI_SERVICE_PORT}"
 OKAPI_JAR="${OKAPI_JAR:=okapi-core/target/okapi-core-fat.jar}"
 OKAPI_ROLE="${OKAPI_ROLE:=cluster}"
+OKAPI_LOGLEVEL="${OKAPI_LOGLEVEL:=INFO}"
 
 # Create ~/.pgpass file with appropriate credentials
 echo "$DB_HOST:$DB_PORT:*:$DB_USERNAME:$DB_PASSWORD" > ~/.pgpass
@@ -64,6 +65,8 @@ if [ "$1" != '--in-memory' ]; then
 else
     OKAPI_JAVA_OPTS+=" -Dstorage=inmemory"
 fi
+
+OKAPI_JAVA_OPTS+=" -Dloglevel=${OKAPI_LOGLEVEL}"
 
 # Tell Okapi its own official URL. This gets passed to the
 # modules as X-Okapi-Url header, and the modules can use this

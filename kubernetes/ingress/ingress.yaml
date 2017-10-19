@@ -4,14 +4,9 @@ metadata:
   name: okapi-ingress
   annotations:
     kubernetes.io/ingress.class: "nginx"
-    kubernetes.io/tls-acme: "true"
 spec:
-  tls:
-  - secretName: okapi2-tls
-    hosts:
-    - okapi2.frontside.io
   rules:
-  - host: okapi2.frontside.io
+  - host: okapi-sandbox.frontside.io
     http:
       paths:
       - path: /

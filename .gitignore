@@ -1,1 +1,3 @@
 /kubernetes/secrets
+.env
+.vscode
