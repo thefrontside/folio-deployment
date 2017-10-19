@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-ingress-controller
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      name: http
+      protocol: TCP
+    - port: 443
+      name: https
+      protocol: TCP
+  selector:
+    k8s-app: nginx-ingress-lb
+---
+
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-ingress-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+        k8s-app: nginx-ingress-lb
+  template:
+    metadata:
+      labels:
+        k8s-app: nginx-ingress-lb
+    spec:
+      containers:
+        - name: nginx-ingress-controller
+          image: gcr.io/google_containers/nginx-ingress-controller:0.9.0-beta.11
+          args:
+             - /nginx-ingress-controller
+             - --default-backend-service=default/default-backend
+             - --default-ssl-certificate=$(POD_NAMESPACE)/tls-certificate
+          env:
+             - name: POD_NAME
+               valueFrom:
+                 fieldRef:
+                   fieldPath: metadata.name
+             - name: POD_NAMESPACE
+               valueFrom:
+                 fieldRef:
+                   fieldPath: metadata.namespace
+          ports:
+          - name: http
+            containerPort: 80
+          - name: https
+            containerPort: 443
+          livenessProbe:  # Optional
+            httpGet:
+              path: /healthz
+              port: 10254
+              scheme: HTTP
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+          resources:  # Optional
+            requests:
+              memory: "10Mi"
+            limits:
+              memory: "100Mi"
