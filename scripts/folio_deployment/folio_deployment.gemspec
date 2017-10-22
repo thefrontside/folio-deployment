@@ -27,7 +27,7 @@ Gem::Specification.new do |spec|
     f.match(%r{^(test|spec|features)/})
   end
   spec.bindir        = "bin"
-  spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
+  spec.executables   = spec.files.grep(%r{^bin/okube}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
   spec.add_development_dependency "bundler", "~> 1.15"
@@ -44,9 +44,11 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'pastel'
   spec.add_runtime_dependency 'dotenv'
   spec.add_runtime_dependency 'psych'
+  spec.add_runtime_dependency 'multi_json'
   spec.add_runtime_dependency 'hashugar'
   spec.add_runtime_dependency 'configatron'
   spec.add_runtime_dependency 'dnsimple'
   spec.add_runtime_dependency 'net-ping'
   spec.add_runtime_dependency 'ssl-test'
+  spec.add_runtime_dependency 'tilt'
 end

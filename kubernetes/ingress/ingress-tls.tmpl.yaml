@@ -9,9 +9,9 @@ spec:
   tls:
   - secretName: okapi-tls
     hosts:
-    - okapi-sandbox.frontside.io
+    - <%= host %>
   rules:
-  - host: okapi-sandbox.frontside.io
+  - host: <%= host %>
     http:
       paths:
       - path: /

@@ -1,24 +1,8 @@
 # coding: utf-8
 module FolioDeployment
   module CLI
-    module Commands
-      class Base < Clamp::Command
-        attr_accessor :pastel, :prompt, :shell, :client, :okapi, :dnsimple_client
-
-        # K8S Client #
-        def client
-          @client ||= Kubeclient::Client.new('http://127.0.0.1:8001/api', 'v1')
-        end
-
-        # Okapi Client #
-        def okapi
-          @okapi ||= Okapi::Client.new('https://okapi-sandbox.frontside.io', 'fs', nil)
-        end
-
-        def dnsimple_client
-          @dnsimple_client = Dnsimple::Client.new(access_token: ENV['DNSIMPLE_TOKEN'])
-        end
-
+    module Utils
+      module UserInterface
         # TTY Helpers #
         def pastel
           @pastel ||= Pastel.new
@@ -75,11 +59,6 @@ module FolioDeployment
         def die(msg)
           put_error msg
           exit
-        end
-
-        option "--version", :flag, "show version" do
-          puts "folio-deployment-0.0.1a"
-          exit 0
         end
       end
     end
