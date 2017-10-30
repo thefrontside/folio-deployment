@@ -1,17 +1,17 @@
 # coding: utf-8
 lib = File.expand_path("../lib", __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require "folio_deployment/version"
+require "okubi/version"
 
 Gem::Specification.new do |spec|
-  spec.name          = "folio_deployment"
-  spec.version       = FolioDeployment::VERSION
-  spec.authors       = ["Joe LaSala"]
+  spec.name          = "okubi"
+  spec.version       = Okubi::VERSION
+  spec.authors       = ["The Frontside (frontside.io)"]
   spec.email         = ["joe@frontside.io"]
 
   spec.summary       = %q{Internal tool for deploying FOLIO Open Library Platform to Kubernetes/GKE}
   spec.description   = %q{Internal tool for deploying FOLIO Open Library Platform to Kubernetes/GKE}
-  spec.homepage      = "https://www.github.com/thefrontside/folio-deployment"
+  spec.homepage      = "https://www.github.com/thefrontside/folio-deployment/tree/master/scripts/okubi"
   spec.license       = "MIT"
 
   # Prevent pushing this gem to RubyGems.org. To allow pushes either set the 'allowed_push_host'
@@ -23,11 +23,12 @@ Gem::Specification.new do |spec|
       "public gem pushes."
   end
 
-  spec.files         = `git ls-files -z`.split("\x0").reject do |f|
-    f.match(%r{^(test|spec|features)/})
+  # spec.files         = `git ls-files -z`.split("\x0").reject do |f|
+  spec.files           = Dir["**/*"].reject do |f|
+    File.directory?(f) || f.match(%r{^(test|spec|features)/})
   end
   spec.bindir        = "bin"
-  spec.executables   = spec.files.grep(%r{^bin/okube}) { |f| File.basename(f) }
+  spec.executables   = spec.files.grep(%r{^bin/okubi}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
   spec.add_development_dependency "bundler", "~> 1.15"

@@ -1,5 +1,5 @@
 # coding: utf-8
-module FolioDeployment
+module Okubi
   module CLI
     module Utils
       module UserInterface

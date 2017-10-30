@@ -1,7 +1,0 @@
-#! /bin/bash --login
-rvm use '2.4.2' &> /dev/null
-
-BASEDIR=$(dirname "$0")
-
-bundle install --gemfile ${BASEDIR}/../folio_deployment/Gemfile &> /dev/null
-BUNDLE_GEMFILE=${BASEDIR}/../folio_deployment/Gemfile bundle exec  ${BASEDIR}/../folio_deployment/bin/okube $@

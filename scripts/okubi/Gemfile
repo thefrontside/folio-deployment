@@ -4,5 +4,4 @@ ruby '2.4.2'
 
 gem 'okapi', :git => 'https://github.com/thefrontside/okapi.rb.git'
 
-# Specify your gem's dependencies in folio_deployment.gemspec
 gemspec

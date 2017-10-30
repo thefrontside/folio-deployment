@@ -1,11 +1,11 @@
 # coding: utf-8
-module FolioDeployment
+module Okubi
   module CLI
     module Commands
       class Base < Clamp::Command
 
-        include FolioDeployment::CLI::Utils::UserInterface
-        # include FolioDeployment::CLI::Utils::Retriable
+        include Okubi::CLI::Utils::UserInterface
+        # include Okubi::CLI::Utils::Retriable
 
         attr_accessor :environment, :project_root
 

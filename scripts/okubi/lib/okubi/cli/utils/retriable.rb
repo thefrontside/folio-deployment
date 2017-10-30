@@ -1,4 +1,4 @@
-module FolioDeployment
+module Okubi
   module CLI
     module Utils
       module Retriable
@@ -38,6 +38,6 @@ end
 
 # "Started at the bottom now we here"
 class Object
-  include FolioDeployment::CLI::Utils::Retriable
-  extend FolioDeployment::CLI::Utils::Retriable
+  include Okubi::CLI::Utils::Retriable
+  extend Okubi::CLI::Utils::Retriable
 end

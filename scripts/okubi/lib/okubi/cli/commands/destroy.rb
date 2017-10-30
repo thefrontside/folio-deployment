@@ -1,4 +1,4 @@
-module FolioDeployment
+module Okubi
   module CLI
     module Commands
       class Destroy < Base

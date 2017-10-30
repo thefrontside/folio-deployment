@@ -1,8 +1,4 @@
-# require 'pry-byebug'
-# require 'erb'
-# require 'tempfile'
-
-module FolioDeployment
+module Okubi
   module CLI
     module Commands
       class Deploy < Base
@@ -11,6 +7,8 @@ module FolioDeployment
 
         def execute
           put_command "Deploying FOLIO"
+
+          exit 0
 
           load_configuration(environment)
           configure_kubernetes
@@ -230,11 +228,6 @@ module FolioDeployment
             )
           end
 
-          # Split into modules we're building from source and module we're
-          # pulling from a container registry
-          # source_modules = modules.select { |module_config| module_config.manifest }
-          # image_modules = modules - source_modules
-          # binding.pry
           return modules
         end
 
@@ -294,7 +287,7 @@ module FolioDeployment
           modules.each do |module_config|
             put_bullet "#{module_config.name} : #{ module_config.tag ? module_config.tag : 'latest' }"
           end
-          # binding.pry
+
           module_versions = okapi.post '/_/proxy/tenants/fs/install?simulate=true',
                                        modules.map(&:installation_payload).map(&:to_hash)
 
