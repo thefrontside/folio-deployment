@@ -49,7 +49,7 @@ spec:
         - name: REPO_NAME
           value: "folio-org/okapi.git"
         - name: REPO_VERSION
-          value: "v2.0.0"
+          value: "v2.1.0"
         - name: DB_HOST
           value: "localhost"
         - name: DB_PORT

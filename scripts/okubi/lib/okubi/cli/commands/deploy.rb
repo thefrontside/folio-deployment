@@ -8,7 +8,7 @@ module Okubi
         def execute
           put_command "Deploying FOLIO"
 
-          exit 0
+          # exit 0
 
           load_configuration(environment)
           configure_kubernetes
@@ -34,8 +34,12 @@ module Okubi
           # pulled from the central registry by now.
           register_modules(modules)
 
+
+
           # Resolve module dependencies to compatible versions
           modules = resolve_module_dependencies(modules)
+
+
 
           # Deploy modules to Kubernetes cluster
           deploy_modules(modules)
@@ -223,30 +227,50 @@ module Okubi
               tag: module_config.tag,
               manifest: module_config.manifest,
               image: module_config.image,
+              rolling: module_config.rolling,
+              priority: module_config.priority,
+              hold: module_config.hold,
               module_descriptor: module_config.module_descriptor,
               installation_payload: installation_payload
             )
           end
 
+          # Sort any module with a priority to the top, and sort those
+          # in ascending order.
+          modules.sort_by! {|child| [child.priority ? 0 : 1,child.priority || 0]}
+
           return modules
+        end
+
+        def deploy_module(folio_module)
+          # Inject appropriate values into a Kubernetes manifest template
+          # according to what was found in `folio.conf`, then apply
+          # the manifests to the cluster.  If the corresponding resoures
+          # already exist, any change should trigger a RollingUpdate
+          apply_from_template(
+            "#{project_root}/kubernetes/folio_modules/folio-module.tmpl.yaml",
+            folio_module.name,
+            folio_module: folio_module,
+            storage: configatron.storage
+          )
+
+          if folio_module.priority
+            put_bullet "#{pastel.bold.yellow('(PRIORITY)')} #{folio_module.name}"
+            blocking_pod = kube_client.get_pods(label_selector: "run=#{folio_module.name}").first
+            until blocking_pod && blocking_pod&.status&.containerStatuses&.map(&:ready)&.all? do
+              sleep 10
+              blocking_pod = kube_client.get_pods(label_selector: "run=#{folio_module.name}").first
+            end
+          else
+            put_bullet "#{folio_module.name}"
+          end
         end
 
         def deploy_modules(modules)
           put_task "Deploying FOLIO Modules"
 
-          # Inject appropriate values into a Kubernetes manifest template
-          # according to what was found in `folio.conf`, then apply
-          # the manifests to the cluster.  If the corresponding resoures
-          # already exist, any change should trigger a RollingUpdate
-          put_info "Applying Kubernetes Manifests"
           modules.each do |folio_module|
-            apply_from_template(
-              "#{project_root}/kubernetes/folio_modules/folio-module.tmpl.yaml",
-              folio_module.name,
-              folio_module: folio_module,
-              storage: configatron.storage
-            )
-            put_bullet "#{folio_module.name}"
+            deploy_module(folio_module)
           end
 
           # Here we use the kubeclient gem to monitor the status of the Pods
@@ -328,7 +352,7 @@ module Okubi
         def pull_registry
           put_task "Pulling Module Registration Info"
           with_retries do
-            okapi.post '/_/proxy/pull/modules', { urls: [ "http://folio-registry.aws.indexdata.com:9130" ] }
+            okapi.post '/_/proxy/pull/modules', { urls: [ configatron.registry ] }
           end
         end
 
