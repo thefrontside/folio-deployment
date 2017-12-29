@@ -8,8 +8,6 @@ module Okubi
         def execute
           put_command "Deploying FOLIO"
 
-          # exit 0
-
           load_configuration(environment)
           configure_kubernetes
 
@@ -23,7 +21,7 @@ module Okubi
 
           create_tenant
 
-          # TODO: find a better way
+          # # TODO: find a better way
           pull_registry
 
           # Modules are monged into a uniform data structure
@@ -34,12 +32,8 @@ module Okubi
           # pulled from the central registry by now.
           register_modules(modules)
 
-
-
           # Resolve module dependencies to compatible versions
           modules = resolve_module_dependencies(modules)
-
-
 
           # Deploy modules to Kubernetes cluster
           deploy_modules(modules)
@@ -185,7 +179,6 @@ module Okubi
           put_task "Deploying Okapi"
 
           put_info "Applying Kubernetes Manifest"
-          shell.run!("kubectl apply -f #{project_root}/kubernetes/okapi/okapi.yaml")
 
           # To be revisited. The Okapi Dockerfile doesn't include an entrypoint,
           # nor does it seem to work out of the box.  Generally when Okapi
@@ -194,12 +187,12 @@ module Okubi
           # lack of command.  We may have to go back to building our own Okapi
           # images with augmented Dockerfiles.
 
-          # apply_from_template(
-          #   "#{project_root}/kubernetes/okapi/okapi.tmpl.yaml",
-          #   'okapi',
-          #   okapi: configatron.okapi,
-          #   storage: configatron.storage
-          # )
+          apply_from_template(
+            "#{project_root}/kubernetes/okapi/okapi.tmpl.yaml",
+            'okapi',
+            okapi: configatron.okapi,
+            storage: configatron.storage
+          )
 
           sleep 10
 
@@ -229,6 +222,7 @@ module Okubi
               image: module_config.image,
               rolling: module_config.rolling,
               priority: module_config.priority,
+              env: Array(module_config.env), # don't choke on `.each`
               hold: module_config.hold,
               module_descriptor: module_config.module_descriptor,
               installation_payload: installation_payload
@@ -237,7 +231,7 @@ module Okubi
 
           # Sort any module with a priority to the top, and sort those
           # in ascending order.
-          modules.sort_by! {|child| [child.priority ? 0 : 1,child.priority || 0]}
+          modules.sort_by! { |child| [child.priority ? 0 : 1,child.priority || 0] }
 
           return modules
         end
@@ -345,14 +339,28 @@ module Okubi
 
         def create_admin_user
           put_task "Creating 'admin' User"
-          shell.run!("kubectl apply -f #{project_root}/kubernetes/jobs/create-admin-user.yaml")
+          apply_from_template(
+            "#{project_root}/kubernetes/jobs/create-admin-user.tmpl.yaml",
+            'create-admin-user',
+            storage: configatron.storage
+          )
           sleep 5
         end
 
         def pull_registry
           put_task "Pulling Module Registration Info"
-          with_retries do
+          put_warning "This operation will take approximately 10 minutes.  Grab a coffee."
+
+          sleep 10
+
+          # TODO: use a readiness check instead of a hardcoded sleep
+          # the post below will timeout, so we need to trap that.
+          # another option would be to add support for a custom timeout
+          # in okapi.rb.
+          begin
             okapi.post '/_/proxy/pull/modules', { urls: [ configatron.registry ] }
+          rescue
+            sleep 500
           end
         end
 

@@ -31,7 +31,12 @@ spec:
       containers:
         - name: <%= folio_module.name %>
           image: <%= folio_module.image %>:<%= folio_module.rolling ? 'latest' : folio_module.tag %>
+          imagePullPolicy: Always
           env:
+            <% folio_module.env.each do |var| %>
+            - name: <%= var.name %>
+              value: "<%= var.value %>"
+            <% end %>
             - name: DB_HOST
               value: "<%= storage.host %>"
             - name: DB_PORT
@@ -48,7 +53,6 @@ spec:
                 secretKeyRef:
                   name: <%= storage.credentials_secret %>
                   key: password
-          imagePullPolicy: Always
         - image: gcr.io/cloudsql-docker/gce-proxy:1.09
           name: cloudsql-proxy
           command: ["/cloud_sql_proxy", "--dir=/cloudsql",
