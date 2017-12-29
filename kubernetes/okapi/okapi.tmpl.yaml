@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    run: okapi
+  name: okapi
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 9130
+  selector:
+    run: okapi
+  type: NodePort
+status:
+  loadBalancer: {}
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    run: okapi
+  name: okapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: okapi
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: okapi
+    spec:
+      containers:
+      - name: okapi
+        image: gcr.io/okapi-173322/folio-toolkit
+        readinessProbe:
+          exec:
+            command:
+              - grep
+              - 'Deploy completed succesfully'
+              - /tmp/health
+          initialDelaySeconds: 10
+        env:
+        - name: REPO_NAME
+          value: <%= okapi.repo %>
+        - name: REPO_VERSION
+          value: <%= okapi.version %>
+        - name: DB_HOST
+          value: "<%= storage.host %>"
+        - name: DB_PORT
+          value: "<%= storage.port %>"
+        - name: DB_DATABASE
+          value: <%= storage.database %>
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: <%= storage.credentials_secret %>
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: <%= storage.credentials_secret %>
+              key: password
+        - name: OKAPI_ROLE
+          value: "cluster"
+        command: ["/usr/local/bin/folio/install_java.sh"]
+        args: ["/usr/local/bin/folio/okapi-initdb-and-start.sh"]
+        resources: {}
+      - name: cloudsql-proxy
+        command: ["/cloud_sql_proxy", "--dir=/cloudsql",
+                    "-instances=<%= storage.instance %>=tcp:<%= storage.port %>",
+                    "-credential_file=/secrets/cloudsql/credentials.json"]
+        image: gcr.io/cloudsql-docker/gce-proxy:1.09
+        imagePullPolicy: IfNotPresent
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+          - name: <%= storage.instance_credentials_secret %>
+            mountPath: /secrets/cloudsql
+            readOnly: true
+          - name: ssl-certs
+            mountPath: /etc/ssl/certs
+          - name: cloudsql
+            mountPath: /cloudsql
+        resources: {}
+      volumes:
+      - name: <%= storage.instance_credentials_secret %>
+        secret:
+          secretName: <%= storage.instance_credentials_secret %>
+      - name: ssl-certs
+        hostPath:
+          path: /etc/ssl/certs
+      - name: cloudsql
+        emptyDir:
+status: {}

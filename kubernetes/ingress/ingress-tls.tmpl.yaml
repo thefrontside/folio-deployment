@@ -4,7 +4,12 @@ metadata:
   name: okapi-ingress
   annotations:
     kubernetes.io/ingress.class: "nginx"
+    kubernetes.io/tls-acme: "true"
 spec:
+  tls:
+  - secretName: okapi-tls
+    hosts:
+    - <%= host %>
   rules:
   - host: <%= host %>
     http:

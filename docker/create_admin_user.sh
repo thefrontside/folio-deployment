@@ -20,7 +20,11 @@ superuser_password='admin'
 superuser_hash='52DCA1934B2B32BEA274900A496DF162EC172C1E'
 superuser_salt='483A7C864569B90C24A0A6151139FF0B95005B16'
 superuser_perms_user_id='2408ae64-56ad-4177-9024-1e35fe5d895c'
-superuser_permissions='"perms.all","users.all","login.all","configuration.all",users-bl.all'
+
+# TODO: make this dynamic
+# select jsonb->>'permissionName' from fs_mod_permissions.permissions WHERE jsonb->>'permissionName' LIKE '%all%';
+superuser_permissions='"perms.all","users.all","login.all","configuration.all","users-bl.all","notify.all","configuration.entries.collection.get","configuration.entries.item.post"'
+
 superuser_id='1ad737b0-d847-11e6-bf26-cec0c932ce01'
 superuser_firstname='FrontsideFirst'
 superuser_lastname='FrontsideLast'

@@ -1,4 +1,0 @@
-#! /bin/bash --login
-rvm use '2.4.2'
-BUNDLE_GEMFILE=./vendor/folio_deployment/Gemfile bundle install &> /dev/null
-BUNDLE_GEMFILE=./vendor/folio_deployment/Gemfile bundle exec ./vendor/folio_deployment/bin/folio $@
