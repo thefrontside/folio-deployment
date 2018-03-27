@@ -1,3 +1,4 @@
+/scripts/okubi/bundler_stubs
 /kubernetes/secrets
 .env
 .vscode

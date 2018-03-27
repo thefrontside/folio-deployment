@@ -3,26 +3,26 @@ module Okubi
     module Commands
       class Deploy < Base
 
-        option '--environment', "ENVIRONMENT", "The environment to deploy against", :required => :true
-
         def execute
           put_command "Deploying FOLIO"
 
-          load_configuration(environment)
-          configure_kubernetes
+          # TODO: use an upwards hook instead of super
+          super
 
-          # Ingress / DNS stuff
-          public_address = deploy_ingress_controller
-          configure_dnsimple(public_address)
-          deploy_okapi
-          deploy_ingress
-          deploy_lego
-          enable_ingress_tls
+          # TODO: store these in a structure and iterate over them,
+          # following a similar pattern for all commands
+          Operations::ConfigureKubernetes.new(context: configatron.context).call
+          Operations::DeployIngressController.new.call
+          Operations::ConfigureDnsimple.new(public_address: configatron.public_address).call
+          Operations::DeployOkapi.new.call
+          Operations::ConfigureIngress.new.call
+          Operations::CreateTenant.new.call
+          Operations::PullRegistry.new.call
+          exit 0;
 
-          create_tenant
-
-          # # TODO: find a better way
-          pull_registry
+          # TODO: needs either a restructuring or operations need
+          # a way to flow data from one operation to the next.  I swear i've
+          # seen a gem that uses a similar pattern somewhere...
 
           # Modules are monged into a uniform data structure
           modules = prepare_modules
@@ -39,32 +39,20 @@ module Okubi
           deploy_modules(modules)
           discover_modules(modules)
           enable_modules_for_tenant(modules, configatron.tenant)
-          create_admin_user
+
+          Operations::CreateAdminUser.new.call
 
           put_success "FOLIO Successfully Deployed"
           shell_out.run!("kubectl get all")
           exit 0
         end
 
-        def configure_kubernetes
-          put_task "Configuring Kubernetes"
-          put_info "Setting Context: #{ pastel.yellow(configatron.context) }"
+        # def operate
+        #   [
+        #     Operations::ConfigureKubernetes.new(context: configatron.context),
 
-          shell.run!("kubectl config use-context #{configatron.context}")
-
-          put_info "Killing Running 'kubectl' Processes"
-          shell.run!('sudo killall -9 kubectl &> /dev/null')
-
-          # TODO: check if one is already running and kill it first
-          put_info "Starting Kubernetes Proxy"
-          fork do
-            exec 'kubectl proxy &> /dev/null'
-          end
-          sleep 2
-
-          put_info "Connecting To Kubernetes"
-          kube_client.discover
-        end
+        #   ]
+        # end
 
         def register_modules(modules)
           modules.select { |folio_module| folio_module.module_descriptor }.each do |folio_module|
@@ -77,133 +65,6 @@ module Okubi
           end
         end
 
-        def deploy_ingress_controller
-          put_task "Deploying NGINX Ingress Controller"
-
-          put_info "Create 'nginx-ingress' Namespace"
-          shell.run!("kubectl apply -f #{project_root}/kubernetes/ingress/nginx/00-nginx-namespace.yaml")
-          sleep 2
-
-          put_info "Deploying Default HTTP Backend"
-          shell.run!("kubectl apply -f #{project_root}/kubernetes/ingress/nginx/default-http-backend.yaml")
-          sleep 5
-
-          put_info "Deploying NGINX"
-          shell.run!("kubectl apply -f #{project_root}/kubernetes/ingress/nginx/nginx-ingress-controller.yaml")
-          sleep 5
-
-          put_info "Waiting For Public Address"
-
-          nginx = nil
-          with_retries(:limit => 25, :sleep => 5) do
-            nginx = kube_client.get_service 'nginx-ingress-controller', 'nginx-ingress'
-          end
-
-          until (public_address = nginx&.status&.loadBalancer&.ingress&.first&.ip)
-            sleep 10
-            nginx = kube_client.get_service 'nginx-ingress-controller', 'nginx-ingress'
-          end
-
-          put_info "Public Address: #{public_address}"
-          return public_address
-        end
-
-        def configure_dnsimple(public_address)
-          put_task "Configuring DNSimple"
-
-          # Gather info required for DNSimple API
-          uri = URI(configatron.host)
-          record_name = uri.host.split('.')[0]
-          zone_name = uri.host.split('.')[1..-1].join('.')
-
-          account_id = dnsimple_client.identity.whoami.data.account.id
-          record_id = dnsimple_client.zones.all_records(
-            account_id,
-            zone_name
-          ).data.find { |record| record.name == record_name }.id
-
-
-          put_info "Updating Record '#{uri.host}' -> #{public_address}"
-          dnsimple_client.zones.update_record(
-            account_id,
-            'frontside.io',
-            record_id,
-            content: "#{public_address}"
-          )
-
-          put_info "Waiting for DNS refresh"
-          until Resolv.getaddress(uri.host) == "#{public_address}"
-            sleep 5
-          end
-        end
-
-        def deploy_lego
-          put_task "Deploying 'kube-lego' Certificate Manager"
-
-          put_info "Create 'kube-lego' Namespace"
-          shell.run!("kubectl apply -f #{project_root}/kubernetes/ingress/lego/00-lego-namespace.yaml")
-
-          put_info "Configuring Lego"
-          shell.run!("kubectl apply -f #{project_root}/kubernetes/ingress/lego/lego-configmap.yaml")
-
-          put_info "Deploying Lego"
-          shell.run!("kubectl apply -f #{project_root}/kubernetes/ingress/lego/lego.yaml")
-        end
-
-        def deploy_ingress
-          put_task "Deploying Ingress"
-
-          apply_from_template(
-            "#{project_root}/kubernetes/ingress/ingress.tmpl.yaml",
-            'ingress',
-            host: URI(configatron.host).host
-          )
-        end
-
-        def enable_ingress_tls
-          put_task "Enabling TLS Termination (HTTPS)"
-
-          apply_from_template(
-            "#{project_root}/kubernetes/ingress/ingress-tls.tmpl.yaml",
-            'ingress-tls',
-            host: URI(configatron.host).host
-          )
-
-          put_info "Verifying Certificate for #{configatron.host}"
-          until SSLTest.test(configatron.host)[0]
-            sleep 3
-          end
-        end
-
-        def deploy_okapi
-          put_task "Deploying Okapi"
-
-          put_info "Applying Kubernetes Manifest"
-
-          # To be revisited. The Okapi Dockerfile doesn't include an entrypoint,
-          # nor does it seem to work out of the box.  Generally when Okapi
-          # is started it requires a command and takes options, but that
-          # never seems to happen and the logs show Okapi carping about the
-          # lack of command.  We may have to go back to building our own Okapi
-          # images with augmented Dockerfiles.
-
-          apply_from_template(
-            "#{project_root}/kubernetes/okapi/okapi.tmpl.yaml",
-            'okapi',
-            okapi: configatron.okapi,
-            storage: configatron.storage
-          )
-
-          sleep 10
-
-          # Wait until Okapi is "Ready" before proceeding
-          put_info "Waiting for Okapi Pod to Achieve #{ pastel.yellow('Ready') } State"
-          okapi_pod = kube_client.get_pods(label_selector: 'run=okapi').first
-          until okapi_pod && okapi_pod.status.containerStatuses.map(&:ready).all? do
-            okapi_pod = kube_client.get_pods(label_selector: 'run=okapi').first
-            sleep 10
-          end
-        end
 
         def prepare_modules
           # This builds a more palatable data structure from our
@@ -332,37 +193,9 @@ module Okubi
           return modules
         end
 
-        def create_tenant
-          put_task "Creating Tenant: #{ pastel.yellow(configatron.tenant) }"
-          shell.run!("kubectl apply -f #{project_root}/kubernetes/jobs/create-tenant.yaml")
-        end
 
-        def create_admin_user
-          put_task "Creating 'admin' User"
-          apply_from_template(
-            "#{project_root}/kubernetes/jobs/create-admin-user.tmpl.yaml",
-            'create-admin-user',
-            storage: configatron.storage
-          )
-          sleep 5
-        end
 
-        def pull_registry
-          put_task "Pulling Module Registration Info"
-          put_warning "This operation will take approximately 10 minutes.  Grab a coffee."
 
-          sleep 10
-
-          # TODO: use a readiness check instead of a hardcoded sleep
-          # the post below will timeout, so we need to trap that.
-          # another option would be to add support for a custom timeout
-          # in okapi.rb.
-          begin
-            okapi.post '/_/proxy/pull/modules', { urls: [ configatron.registry ] }
-          rescue
-            sleep 500
-          end
-        end
 
         def discover_modules(modules)
           # Once modules are registered, they must be discovered.  This
@@ -400,21 +233,21 @@ module Okubi
           okapi.post "/_/proxy/tenants/fs/install", installations
         end
 
-        def apply_from_template(template_file, manifest_name, options={})
-          # Store the result of the rendered template in a Tempfile
-          # since `kubectl` likes to consume files.
-          temp_file = Tempfile.new("#{manifest_name}:#{Time.now.to_i}")
+        # def apply_from_template(template_file, manifest_name, options={})
+        #   # Store the result of the rendered template in a Tempfile
+        #   # since `kubectl` likes to consume files.
+        #   temp_file = Tempfile.new("#{manifest_name}:#{Time.now.to_i}")
 
-          # Tilt is like MultiJson for templating languages
-          template = Tilt::ERBTemplate.new(template_file)
-          manifest = template.render(nil, options)
+        #   # Tilt is like MultiJson for templating languages
+        #   template = Tilt::ERBTemplate.new(template_file)
+        #   manifest = template.render(nil, options)
 
-          # Populate, apply, and then destroy the manifest
-          temp_file << manifest
-          temp_file.flush
-          shell.run!("kubectl apply -f #{temp_file.path}")
-          temp_file.close
-        end
+        #   # Populate, apply, and then destroy the manifest
+        #   temp_file << manifest
+        #   temp_file.flush
+        #   shell.run!("kubectl apply -f #{temp_file.path}")
+        #   temp_file.close
+        # end
       end
     end
   end
